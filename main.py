@@ -1,185 +1,130 @@
-from collections import UserDict
-from collections.abc import Iterator
-from datetime import date
-from datetime import datetime
-from random import randrange
-import time
+''' The console bot assistant recognizes the following commands entered from the keyboard:
+        "hello"    - responds to a greeting with a phrase: "How can I help you?"
+        "add"      - Adds a new contact to the phone book
+        "change"   - Replaces the phone number for an existing user
+        "phone"    - Print the phone number of the specified user to the console
+        "show all" - Output all saved contacts to the console
+        "good bye", "close", "exit" - Finishing work '''
+        
+dict_user = dict()                               # Phonebook
 
-class Field:
-    
-    def __init__(self, value):
-        self.value = value
-
-    def __str__(self):
-        return str(self.value)
-
-class Name(Field):
-    
-    def __init__(self, value):
-        super().__init__(value)
-        self.__value = value
-        
-    @property
-    def value(self):
-        return self.__value
-    
-    @value.setter
-    def value(self, value):
-        self.__value = value
-
-
-class Phone(Field):
-    
-    def __init__(self, value):
-        self.__value = value
-        self.check_phone(value)
-        
-    def check_phone(self, phone):
-        if not phone.isdigit():
-            raise ValueError(f'There is an invalid character in number "{phone}"')
-        if len(phone) != 10:
-            raise ValueError(f'Number "{phone}" must have 10 digits')
-        return phone
-        
-    @property
-    def value(self):
-        return self.__value
-    
-    @value.setter
-    def value(self, value):
-        self.__value = self.check_phone(value)
-        
-        
-class Birthday(Field):
-    
-    def __init__(self, value):
-        super().__init__(value)
-        self.__value = value
-        self.check_birthday(value)
-        
-    def check_birthday(self, value):
-        value = value.replace('.', '').replace('/','')
+''' Decorator. Exception Handling '''
+def input_error(func):
+    def wrapper(*args, **kwargs):
         try:
-            self.__value = time.strptime(value, '%d%m%Y')
-            return self.__value
-        except:
-            raise ValueError(f'Date format error {value}')
-        
-    
-    @property
-    def value(self):
-        return self.__value
-    
-    @value.setter
-    def value(self, value):
-        self.__value = self.check_birthday(value)
-        
+            result = func(*args, **kwargs)
+        except KeyError:
+            return f'Error: Command not recognized "{args[0]}". \nPlease re-enter: '
+        except IndexError:
+            return f'Error: Invalid number of parameters "{args[0]}". \nPlease re-enter: '
+        except ValueError:
+            return f'Error: User "{args[0]}". Not in the phonebook\nPlease re-enter: '
+        return result
+    return wrapper
 
-class Record:
+''' Decorator. Controlling command parameters '''
+def check_param(from_func):
+    def check(func):
+        def wrapper(list_param):
+            if from_func == 'add' or from_func == 'change':
+                if len(list_param) != 2:
+                    raise IndexError
+                name_user, phone_user = list_param
+            elif from_func == 'phone':
+                if len(list_param) != 1:
+                    raise IndexError
+                name_user = list_param[0]
+                phone_user = '0000000'
+                
+            if not name_user.isalnum():
+                return f'Username "{name_user}" contains invalid characters'+\
+                        ' \nPlease re-enter: '
     
-    def __init__(self, name):
-        self.name = Name(name)
-        self.phones = []
-
-    def days_to_birthday(self):
-        current_date = date.today()
-        birthday = self.birthday.value
-        year = current_date.year
-        month = birthday.tm_mon
-        day = birthday.tm_mday
-        birthday = date(year, month, day)
-        if birthday < current_date:
-            birthday = date(year + 1, month, day)
-        return (birthday - current_date).days
+            phone_nom = phone_user.replace('-','')
+            if not phone_nom.isdigit():
+                return f'Phone number "{phone_user}" contains invalid characters'+\
+                        ' \nPlease re-enter: '
     
-    def add_phone(self, phone, birthday=None):
-        self.phone = Phone(phone)
-        self.phones.append(self.phone)
-        if birthday != None:
-            self.birthday = Birthday(birthday)
-
-    def remove_phone(self, phone):
-        self.phone = Phone(phone)
-        for p in self.phones:
-            if p.value == self.phone.value:
-                self.phones.remove(p)
-
-    def edit_phone(self, old_phone, new_phone):
-        self.old_phone = Phone(old_phone)
-        self.new_phone = Phone(new_phone)
-        for p in self.phones:
-            if p.value == self.old_phone.value:
-                p.value = self.new_phone.value
-                return True 
-        raise ValueError       
-
-    def find_phone(self, phone):
-        self.phone = Phone(phone)
-        for p in self.phones:
-            if p.value == self.phone.value:
-                return p
+            if len(phone_nom) != 7:
+                return f'Phone number "{phone_user}" must contain 7 digits'+\
+                        ' \nPlease re-enter: '
     
-    def __str__(self):
-        if hasattr(self, 'birthday'):
-            birthday_date = time.strftime('%d.%m.%Y', self.birthday.value)
-            birthday_txt = f'Birthday: {birthday_date} days left: {self.days_to_birthday()}'
+            return func(list_param, dict_user)                 # Ошибок не обнаружено
+        return wrapper
+    return check
+
+def hello(list_param):
+    return 'How can I help you? '
+
+''' Add a new user '''
+@check_param('add')
+def add(list_param, dict_user):
+    name_user, phone_user = list_param
+    if dict_user.get(name_user) == None:
+        dict_user[name_user] = phone_user
+        return f'User added: "{name_user}" phone: "{phone_user}"'+\
+                '\nContinue typing: '
+    else:
+        return f'User "{name_user}" already in the phonebook '+\
+                '\nContinue typing: '
+
+''' Replacing a phone number '''
+@check_param('change')
+def change(list_param, dict_user):
+    name_user, phone_user = list_param
+    old_phone = dict_user.get(name_user)
+    if old_phone != None:
+        dict_user[name_user] = phone_user
+        return f'For user: "{name_user}" phone number: "{old_phone}"' + \
+               f' has been replaced by: "{phone_user}"' + \
+                '\nContinue typing: '
+    else:
+        return f'User "{name_user}" not in phonebook ' + \
+                '\nPlease re-enter: '
+    
+''' Show user's phone number '''
+@check_param('phone')
+def phone(list_param, dict_user):
+    try:
+        text_return = f'User "{list_param[0]}"  phone:  - "{dict_user[list_param[0]]}"' + \
+                       '\nContinue typing: '
+    except:
+        raise ValueError
+    return text_return
+
+def exit(list_param):
+    return 'exit'
+
+''' Processing information entered from the console '''
+@input_error
+def handler(msg: str, dict_comand):
+    ''' We convert the line from the console into a list, using a space as a separator.
+        If there is more than one space between words, then the resulting empty lines are ignored '''    
+    list_param = tuple(filter(lambda x: x, msg.split(' ')))
+    func = dict_comand[list_param[0]]   # Name of the function for processing the list of parameters
+    list_param = list_param[1:]         # Command Options
+    return func(list_param)                      
+
+''' Dictionary where: Key - command received from the console
+                    Value - function to process this command '''
+dict_command = {
+    'hello'    : hello,
+    'add'      : add,
+    'change'   : change,
+    'phone'    : phone,
+    'close'    : exit,
+    'exit'     : exit
+}
+
+if __name__ == "__main__":
+    msg_bot = "The assistant bot welcomes you. I'm waiting for the command to be entered: "
+    while msg_bot != 'exit':
+        msg_user = input(msg_bot).lower().replace('good bye', 'exit')
+        if 'show all' in msg_user:
+            for user_name, user_phone in dict_user.items():
+                print("|{:^12}|{:^10}|".format(user_name, user_phone))
+            msg_bot = "I'm waiting for the command to be entered: "
         else:
-            birthday_txt = ''
-        return f"Contact name: {self.name.value}, phones: {'; '.join(p.value for p in self.phones)} {birthday_txt}"
-
-
-class AddressBook(UserDict):
-    
-    def iterator(self, max_value):
-        self.max_value = max_value
-        self.tmp_book = {}
-        self.count_str = 1
-        for key, value in self.data.items():
-            self.tmp_book[key] = self.data[key]
-            if self.count_str == self.max_value:
-                yield self.tmp_book
-                self.count_str = 0
-                self.tmp_book.clear()
-            self.count_str += 1
-            
-    def add_record(self, record: Record):
-        self.data[record.name.value] = record
-
-    def find(self, user):
-        self.user = user
-        return self.data.setdefault(self.user)
-    
-    def delete(self, user):
-        self.user = user
-        self.data.pop(self.user, None)
-    
-    
-try:
-    # Creating a new address book
-    book = AddressBook()
-    nom_phone = 1234567000
-    for i in range(50):
-        name_record = 'Name' + '0' + str(i) if i < 10 else 'Name' + str(i)
-        job_record  = Record(name_record)
-        year = str(randrange(1980, 2000))
-        month = str(randrange(1, 12))
-        day = str(randrange(1, 28))
-        for j in range(3):
-            nom_phone += 1
-            if j == 2 and i % 2 == 0:
-                job_record.add_phone(str(nom_phone), day+'.'+month+'.'+year)
-            else:
-                job_record.add_phone(str(nom_phone))
-        book.add_record(job_record)
-    print('---------------------------------------------------------------------------')
-    
-    # Output of all entries in the book page by page
-    
-    print_part = book.iterator(10)
-    for page in print_part:
-        for name, record in page.items():
-           print(record)
-        print('---------------------------------------------------------------------------')
+            msg_bot  = handler(msg_user, dict_command)
         
-except ValueError:
-     raise
+    print('Good bye!')     
